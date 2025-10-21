@@ -1,51 +1,58 @@
---// RetZ Fish It Discord Notifier (Embed)
+--// RetZ Fish It Notifier + Metadata Logger
 --// by ChatGPT x Adrian W
---// Features: Embed Discord, Metadata, Rarity Filter
+--// Features: Discord Embed, Rarity Filter, Autosave, Executor-Compatible
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
 
 -- CONFIG
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1430077249813741618/KHW_vR_0oDaVym9iNmNNVILktB4R8hjHr5sSSUyMWK5VOlk6L3xEeYBINSLOGFO7ofvU"
-local webhook_enabled = true
-local rarity_filter = {Common=true, Uncommon=true, Rare=true, Epic=true, Legendary=true, Mythic=true, Secret=true}
+local configFile = "RetZ_FishIt_Config.json"
+local function safeRead(path)
+    if isfile and isfile(path) then
+        return HttpService:JSONDecode(readfile(path))
+    end
+    return nil
+end
+local function safeWrite(path, data)
+    if writefile then
+        writefile(path, HttpService:JSONEncode(data))
+    end
+end
 
--- Fungsi request kompatibel executor
+local settings = safeRead(configFile) or {
+    webhook = "",
+    webhook_enabled = true,
+    rarity = {Common=true, Uncommon=true, Rare=true, Epic=true, Legendary=true, Mythic=true, Secret=true}
+}
+local function saveSettings() safeWrite(configFile, settings) end
+
+-- Pilih fungsi request
 local request = (syn and syn.request) or (http and http.request) or (http_request) or request
 if not request then warn("[❌] Executor tidak mendukung HTTP request") return end
 
--- Helper: format embed
-local function sendEmbed(fish, player)
-    if not webhook_enabled then return end
-    if not rarity_filter[fish.Rarity] then return end
+-- Helper: kirim embed ke webhook
+local function sendToWebhook(fish)
+    if not settings.webhook_enabled or settings.webhook == "https://discord.com/api/webhooks/1430077249813741618/KHW_vR_0oDaVym9iNmNNVILktB4R8hjHr5sSSUyMWK5VOlk6L3xEeYBINSLOGFO7ofvU" then return end
+    if not settings.rarity[fish.Rarity] then return end -- filter rarity
 
     local embed = {
-        username = "RetZ Fish It",
-        avatar_url = "https://i.ibb.co/7C1tZ4D/fishit.png",
         embeds = {{
-            color = 0x1abc9c,
-            title = string.format("%s just caught a %s fish!", player.Name, fish.Rarity),
-            fields = {
-                {name = "🐟 Fish Name", value = fish.Name or "Unknown", inline = true},
-                {name = "Weight 💎", value = tostring(fish.Weight or 0) .. "kg", inline = true},
-                {name = "Rarity", value = fish.Rarity or "Unknown", inline = true},
-                {name = "💰 Sell Price", value = tostring(fish.SellPrice or 0), inline = true},
-                {name = "📅 Catch Date", value = os.date("%Y-%m-%d %H:%M:%S"), inline = false},
-                {name = "🎯 Total Caught", value = tostring(fish.TotalCaught or 0), inline = true},
-                {name = "🎒 Inventory Size", value = tostring(fish.Inventory or "0/0"), inline = true},
-                {name = "💵 Total Coin", value = tostring(fish.TotalCoin or 0), inline = true},
-                {name = "🎣 Rod Name", value = fish.RodName or "Unknown", inline = true},
-                {name = "⏱ Play Time", value = fish.PlayTime or "Unknown", inline = true},
-            },
-            image = {url = fish.Image or "https://i.ibb.co/7C1tZ4D/fishit.png"},
-            footer = {text = "Fishing isn't a hobby, it's a lifestyle. ~RetZ | Executor: Delta"}
+            title = "🎣 Ikan Baru Ditangkap!",
+            description = string.format(
+                "**Name:** %s\n**Rarity:** %s\n**Weight:** %s\n**ID:** %s",
+                fish.Name or "Unknown",
+                fish.Rarity or "Unknown",
+                fish.Weight or 0,
+                fish.ID or 0
+            ),
+            color = 5814783,
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
         }}
     }
 
     pcall(function()
         request({
-            Url = WEBHOOK_URL,
+            Url = settings.webhook,
             Method = "POST",
             Headers = {["Content-Type"] = "application/json"},
             Body = HttpService:JSONEncode(embed)
@@ -53,7 +60,7 @@ local function sendEmbed(fish, player)
     end)
 end
 
--- Event Fish It
+-- Ambil event ArrayUpdate (Fish It)
 local event = ReplicatedStorage:WaitForChild("Packages")
     :WaitForChild("_Index")
     :WaitForChild("ytrev_replion@2.0.0-rc.3")
@@ -64,21 +71,14 @@ local event = ReplicatedStorage:WaitForChild("Packages")
 event.OnClientEvent:Connect(function(_, _, _, arg4)
     if typeof(arg4) == "table" and arg4.Metadata then
         local meta = arg4.Metadata
-        local player = Players.LocalPlayer
         local fish = {
             Name = meta.Name or "Unknown",
             Rarity = meta.Rarity or "Unknown",
             Weight = meta.Weight or 0,
-            SellPrice = meta.SellPrice or 0,
-            TotalCaught = meta.TotalCaught or 0,
-            Inventory = meta.InventorySize or "0/0",
-            TotalCoin = meta.TotalCoin or 0,
-            RodName = meta.RodName or "Unknown",
-            PlayTime = meta.PlayTime or "Unknown",
-            Image = meta.ImageUrl or "https://i.ibb.co/7C1tZ4D/fishit.png"
+            ID = meta.Id or 0
         }
-        sendEmbed(fish, player)
+        sendToWebhook(fish)
     end
 end)
 
-print("[✅] RetZ Fish It Discord Notifier aktif!")
+print("[✅] RetZ Fish It Metadata Logger aktif!")
