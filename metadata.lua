@@ -1,4 +1,4 @@
---!strict
+--!strict1111
 -- Pastikan Rayfield sudah di-inject
 local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Rayfield/main/source"))()
 
