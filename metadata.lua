@@ -1,74 +1,105 @@
--- LocalScript (Letakkan di StarterPlayerScripts)
+--!strict
+-- Pastikan Rayfield sudah di-inject
 
--- Ganti dengan URL Webhook Discord kamu
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1430077249813741618/KHW_vR_0oDaVym9iNmNNVILktB4R8hjHr5sSSUyMWK5VOlk6L3xEeYBINSLOGFO7ofvU"
+local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Rayfield/main/source"))()
 
-local HttpService = game:GetService("HttpService")
-local player = game.Players.LocalPlayer
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+--// Variables
+local webhookURL = ""
+local discordTag = ""
+local sendWebhook = false
+local selectedTiers = {Common = true, Uncommon = true, Rare = true, Epic = true, Legendary = true, Secret = true}
 
--- Fungsi untuk mengirim data ke Webhook
-local function sendWebhook(data)
-    local payload = HttpService:JSONEncode({
-        content = "",
+--// Utility function: Kirim webhook
+local function sendFishWebhook(fishData)
+    if not sendWebhook then return end
+    if not selectedTiers[fishData.Tier] then return end
+
+    local payload = {
+        username = "Fish It Logger",
         embeds = {{
-            title = "🎣 Ikan Ditangkap!",
-            color = 65280,
-            fields = {
-                {name = "Nama Ikan", value = data.name, inline = true},
-                {name = "Rarity", value = data.rarity, inline = true},
-                {name = "Tier", value = data.tier, inline = true},
-                {name = "Berat (kg)", value = tostring(data.weight), inline = true},
-                {name = "Harga Jual (Coin)", value = tostring(data.sellPrice), inline = true},
-                {name = "Tanggal Ditangkap", value = data.catchDate, inline = false},
-                {name = "Total Ditangkap", value = tostring(data.totalCaught), inline = true},
-                {name = "Ukuran Inventaris", value = tostring(data.inventorySize), inline = true},
-                {name = "Total Coin", value = tostring(data.totalCoin), inline = true},
-                {name = "Nama Rod", value = data.rodName, inline = true},
-                {name = "Waktu Bermain", value = data.playTime, inline = true},
-            }
+            title = fishData.Name,
+            description = string.format(
+                "Rarity: %s\nTier: %s\nWeight: %.2f\nSell Price: %d\nCatch Date: %s\nTotal Caught: %d\nInventory Size: %d\nTotal Coin: %d\nRod Name: %s\nPlay Time: %s", 
+                fishData.Rarity, fishData.Tier, fishData.Weight, fishData.SellPrice, os.date("%c", fishData.CatchTime), fishData.TotalCaught, fishData.InventorySize, fishData.TotalCoin, fishData.RodName, fishData.PlayTime
+            ),
+            image = {url = fishData.ImageURL},
+            footer = {text = "Caught by "..discordTag}
         }}
-    })
-    
-    local success, err = pcall(function()
-        HttpService:PostAsync(WEBHOOK_URL, payload, Enum.HttpContentType.ApplicationJson)
+    }
+
+    local httpService = game:GetService("HttpService")
+    pcall(function()
+        httpService:PostAsync(webhookURL, httpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson)
     end)
-    if not success then
-        warn("Gagal mengirim Webhook:", err)
-    end
 end
 
--- Fungsi untuk mendeteksi variabel yang ada pada player
-local function getPlayerStats()
-    local stats = {
-        totalCaught = player:FindFirstChild("TotalCaught") and player.TotalCaught.Value or 0,
-        inventorySize = player:FindFirstChild("InventorySize") and player.InventorySize.Value or 0,
-        totalCoin = player:FindFirstChild("Coins") and player.Coins.Value or 0,
-        rodName = player:FindFirstChild("RodName") and player.RodName.Value or "Tidak Diketahui",
-        playTime = math.floor(player.TotalPlayTime.Value / 60).." menit"
+--// Rayfield UI
+local Window = Rayfield:CreateWindow({
+    Name = "Fish It Webhook Logger",
+    LoadingTitle = "Fish It Logger",
+    LoadingSubtitle = "By Adrian",
+    ConfigurationSaving = { Enabled = true, FolderName = "FishItWebhookConfigs", FileName = "Config" }
+})
+
+-- Webhook Input
+Window:CreateInput({Name = "Webhook URL", PlaceholderText = "Enter your Discord Webhook URL", RemoveTextAfterFocusLost = false, Callback = function(value) webhookURL = value end})
+-- Discord Tag Input
+Window:CreateInput({Name = "Discord Tag", PlaceholderText = "Ex: Adrian#1234", RemoveTextAfterFocusLost = false, Callback = function(value) discordTag = value end})
+-- Toggle Webhook
+Window:CreateToggle({Name = "Enable Webhook", CurrentValue = false, Callback = function(value) sendWebhook = value end})
+
+-- Tier Selection
+for _, tier in ipairs({"Common","Uncommon","Rare","Epic","Legendary","Secret"}) do
+    Window:CreateToggle({Name = "Send "..tier.." Fish", CurrentValue = true, Callback = function(value) selectedTiers[tier] = value end})
+end
+
+-- Test Webhook
+Window:CreateButton({Name = "Test Webhook", Callback = function()
+    sendFishWebhook({
+        Name = "Test Fish",
+        Rarity = "Common",
+        Tier = "Common",
+        Weight = 1.0,
+        SellPrice = 10,
+        CatchTime = os.time(),
+        TotalCaught = 1,
+        InventorySize = 10,
+        TotalCoin = 100,
+        RodName = "Test Rod",
+        PlayTime = "00:05:23",
+        ImageURL = "https://i.imgur.com/6Y1Z5OJ.png"
+    })
+end})
+
+-- Save Config
+Window:CreateButton({Name = "Save Config", Callback = function() Rayfield:SaveConfiguration() end})
+
+--// Auto detect fish catch
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+-- Cari RemoteEvent Fish It (contoh)
+local catchEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CatchFishEvent") -- sesuaikan nama RemoteEvent
+
+catchEvent.OnClientEvent:Connect(function(fish)
+    -- fish adalah table dari server, contohnya:
+    -- {Name="Golden Carp", Rarity="Rare", Tier="Rare", Weight=2.5, SellPrice=500, Rod="Epic Rod", ImageURL="https://i.imgur.com/...", TotalCaught=5, InventorySize=20, TotalCoin=1000, PlayTime="01:23:45"}
+    
+    local fishData = {
+        Name = fish.Name,
+        Rarity = fish.Rarity,
+        Tier = fish.Tier,
+        Weight = fish.Weight,
+        SellPrice = fish.SellPrice,
+        CatchTime = os.time(),
+        TotalCaught = fish.TotalCaught,
+        InventorySize = fish.InventorySize,
+        TotalCoin = fish.TotalCoin,
+        RodName = fish.Rod,
+        PlayTime = fish.PlayTime,
+        ImageURL = fish.ImageURL
     }
-    return stats
-end
 
--- Fungsi untuk menangani event penangkapan ikan
-local function onFishCaught(fishData)
-    local stats = getPlayerStats()
-    local data = {
-        name = fishData.name or "Tidak Diketahui",
-        rarity = fishData.rarity or "Tidak Diketahui",
-        tier = fishData.tier or "Tidak Diketahui",
-        weight = fishData.weight or 0,
-        sellPrice = fishData.sellPrice or 0,
-        catchDate = os.date("%Y-%m-%d %H:%M:%S"),
-        totalCaught = stats.totalCaught,
-        inventorySize = stats.inventorySize,
-        totalCoin = stats.totalCoin,
-        rodName = stats.rodName,
-        playTime = stats.playTime
-    }
-    sendWebhook(data)
-end
-
--- Menunggu RemoteEvent "FishCaught" dari ReplicatedStorage
-local fishEvent = ReplicatedStorage:WaitForChild("FishCaught")
-fishEvent.OnClientEvent:Connect(onFishCaught)
+    sendFishWebhook(fishData)
+end)
