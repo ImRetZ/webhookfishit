@@ -1,6 +1,5 @@
 --!strict
 -- Pastikan Rayfield sudah di-inject
-
 local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Rayfield/main/source"))()
 
 --// Variables
@@ -28,9 +27,10 @@ local function sendFishWebhook(fishData)
     }
 
     local httpService = game:GetService("HttpService")
-    pcall(function()
+    local ok, err = pcall(function()
         httpService:PostAsync(webhookURL, httpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson)
     end)
+    if not ok then warn("Webhook failed:", err) end
 end
 
 --// Rayfield UI
@@ -79,26 +79,26 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
--- Cari RemoteEvent Fish It (contoh)
-local catchEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CatchFishEvent") -- sesuaikan nama RemoteEvent
+-- Gunakan RemoteEvent FishCaught
+local catchEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("FishCaught")
 
 catchEvent.OnClientEvent:Connect(function(fish)
-    -- fish adalah table dari server, contohnya:
-    -- {Name="Golden Carp", Rarity="Rare", Tier="Rare", Weight=2.5, SellPrice=500, Rod="Epic Rod", ImageURL="https://i.imgur.com/...", TotalCaught=5, InventorySize=20, TotalCoin=1000, PlayTime="01:23:45"}
-    
+    -- Debug: tampilkan data diterima
+    print("Fish caught event:", fish)
+
     local fishData = {
-        Name = fish.Name,
-        Rarity = fish.Rarity,
-        Tier = fish.Tier,
-        Weight = fish.Weight,
-        SellPrice = fish.SellPrice,
+        Name = fish.Name or fish.FishName or "Unknown",
+        Rarity = fish.Rarity or "Unknown",
+        Tier = fish.Tier or "Common",
+        Weight = fish.Weight or 0,
+        SellPrice = fish.SellPrice or 0,
         CatchTime = os.time(),
-        TotalCaught = fish.TotalCaught,
-        InventorySize = fish.InventorySize,
-        TotalCoin = fish.TotalCoin,
-        RodName = fish.Rod,
-        PlayTime = fish.PlayTime,
-        ImageURL = fish.ImageURL
+        TotalCaught = fish.TotalCaught or 0,
+        InventorySize = fish.InventorySize or 0,
+        TotalCoin = fish.TotalCoin or 0,
+        RodName = fish.Rod or "Unknown",
+        PlayTime = fish.PlayTime or "00:00:00",
+        ImageURL = fish.ImageURL or ""
     }
 
     sendFishWebhook(fishData)
